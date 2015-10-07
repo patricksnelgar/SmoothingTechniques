@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="moa">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/../../../Google Drive/Studies/2015/Semester B/COMP523 - Data Stream Mining/Ass 2/moa-release-2014.04a/moa.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/moa.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$PROJECT_DIR$/../../../Google Drive/Studies/2015/Semester B/COMP523 - Data Stream Mining/Ass 2/moa-release-2014.04a/src/moa-2014.04-SNAPSHOT-sources.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/moa-2014.04-SNAPSHOT-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
