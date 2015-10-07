@@ -19,6 +19,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	//TODO: generate new UID.
 	/** For serialization */
 	private static final long serialVersionUID = 123456l;
+
 	private static final int MinNumberOfWords = 10;
 
 	protected double m_alpha = 0.3;
@@ -196,8 +197,8 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 */
 	protected int filterTweet(List<String> tweet) {
 		// TODO: Add in not counting stop words, and setting min # of words.
-		// Check tweet length isn't too small, skip the tweet if it is.
-		if (tweet.size() < SmoothingTechnique.MinNumberOfWords)
+		// Check tweet length isn't too small, skip the tweet if it is, +1 to account for the hash-tag.
+		if (tweet.size() < SmoothingTechnique.MinNumberOfWords + 1)
 			return -1;
 
 		return tweet.indexOf(this.m_hashTag);
