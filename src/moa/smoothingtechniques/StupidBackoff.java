@@ -16,7 +16,7 @@ public class StupidBackoff extends ForegroundModel {
 	@Override
 	protected final double getProbability(final String word) {
 		int currWordCount = this.history.getWordCount(word);
-		if (currWordCount <= 0)	// currWordCount == 0
+		if (currWordCount == 0)
 			return this.normalizeProbability * this.bm.getProbability(word);
 		return this.normalizeCount * ((double)currWordCount / this.history.getTotalCount());
 	}

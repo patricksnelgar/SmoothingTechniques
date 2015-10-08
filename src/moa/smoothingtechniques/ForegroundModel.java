@@ -15,7 +15,7 @@ public abstract class ForegroundModel {
 	/**
 	 * Add the words in the supplied tweet to the current history technique,
 	 * manages the max history requirements internally.
-	 * @param tweet
+	 * @param tweet the tweet to add to the current history.
 	 */
 	public final void addTweet(List<String> tweet) {
 		this.history.addTweet(tweet);
@@ -45,7 +45,9 @@ public abstract class ForegroundModel {
 	 * Clears the current history.
 	 */
 	public final void reset() {
-		this.bm.reset();
-		this.history.reset();
+		if (this.bm != null)
+			this.bm.reset();
+		if (this.history != null)
+			this.history.reset();
 	}
 }

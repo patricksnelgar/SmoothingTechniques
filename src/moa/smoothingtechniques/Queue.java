@@ -39,11 +39,12 @@ public class Queue extends HistoryRetentionTechnique {
 
 	/**
 	 * Clears the current history and queue.
-	 * Calls {@HistoryRetentionTechnique.reset()}
+	 * Also calls HistoryRetentionTechnique.reset()
 	 */
 	@Override
 	public void reset() {
 		super.reset();
-		this.queue.clear();
+		if (this.queue != null)
+			this.queue.clear();
 	}
 }

@@ -20,7 +20,7 @@ public abstract class HistoryRetentionTechnique {
 	/**
 	 * Add the words in the supplied tweet to the current history, manages the max
 	 * history requirements internally.
-	 * @param tweet
+	 * @param tweet the tweet to add to the current history.
 	 */
 	public final void addTweet(final List<String> tweet) {
 		// If we have met our history cap, 'forget' the history.

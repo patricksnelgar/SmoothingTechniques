@@ -19,6 +19,7 @@ public class BackgroundModel {
 	 * @param words List of all words to load in from the background data set.
 	 */
 	public void buildProbabilities(List<String> words) {
+		this.reset();
 		for (String word : words)
 			this.addOccurrence(word);
 		this.calcProbabilities();
