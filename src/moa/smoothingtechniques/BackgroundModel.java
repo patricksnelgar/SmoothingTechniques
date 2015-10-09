@@ -6,6 +6,8 @@ import java.util.Map;
 
 public class BackgroundModel {
 
+	private static final int VocabularyRestrictCount = 10;
+
 	private int totalCount;
 	private final Map<String, Double> probabilities;
 
@@ -51,7 +53,12 @@ public class BackgroundModel {
 	}
 
 	protected void calcProbabilities() {
-	   for (Map.Entry<String, Double> entry : this.probabilities.entrySet())
-		   this.probabilities.put(entry.getKey(), entry.getValue() / this.totalCount);
+		double total = this.totalCount;
+		for (Map.Entry<String, Double> entry : this.probabilities.entrySet()) {
+			if (entry.getValue() <= BackgroundModel.VocabularyRestrictCount)
+				this.probabilities.remove(entry.getKey());
+			else
+				this.probabilities.put(entry.getKey(), (entry.getValue() / total));
+		}
    }
 }

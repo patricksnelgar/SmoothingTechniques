@@ -36,7 +36,7 @@ public abstract class HistoryRetentionTechnique {
 			this.addWord(word);
 	}
 
-	protected final void addWord(final String word) {
+	public final void addWord(final String word) {
 		Integer count = this.set.get(word);
 		if (count == null) this.set.put(word, 1);
 		else this.set.put(word, ++count);
@@ -45,13 +45,15 @@ public abstract class HistoryRetentionTechnique {
 
 	protected abstract void handleMaxHistorySize();
 
-	protected final Integer getWordCount(final String word) {
+	public final Integer getWordCount(final String word) {
 		return this.set.containsKey(word) ? this.set.get(word) : 0;
 	}
 
-	protected final int getTotalCount() {
+	public final int getTotalCount() {
 		return this.totalCount;
 	}
+
+	public final int getTotalUniqueWordCount() { return this.set.size(); }
 
 	/**
 	 * Clears the current history.

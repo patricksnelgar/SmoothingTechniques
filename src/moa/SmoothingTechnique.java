@@ -6,14 +6,13 @@ import moa.core.Measurement;
 import moa.core.StringUtils;
 import moa.options.*;
 import moa.smoothingtechniques.*;
+import moa.smoothingtechniques.Queue;
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.converters.ArffLoader;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public class SmoothingTechnique extends AbstractClassifier implements Regressor {
 
@@ -21,51 +20,83 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	/** For serialization */
 	private static final long serialVersionUID = 123456l;
 
-	protected int m_minWordsInTweet = 10;
-	protected double m_alpha = 0.3;
+	private static final Set<String> StopWords = new HashSet<>(Arrays.asList(
+			new String[] { "I", "a", "about", "an", "are", "as", "at", "be", "by", "com",
+					"for", "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "what",
+					"when", "where", "who", "will", "with", "the", "www" }
+	));
+
+	protected int m_minWordsInTweet = 5;
+	protected boolean m_doStopWordChecking = true;
+	protected double m_absoluteDiscountingSigma = 0.9;
+	protected double m_jalinekMercerSmoothingLambda = 0.4;
+	protected double m_bayesianSmoothingMu = 10000;
+	protected double m_stupidBackoffAlpha = 0.3;
 	protected int m_historySize = 1000;
 	protected int m_tweetIndex = 0;
 	protected String m_hashTag = "";
-	protected String m_backgroundDatapath = "";
+	protected String m_backgroundDataPath = "";
+
+	protected static final int
+			FORGET  = 0,
+			QUEUE   = 1;
+	public MultiChoiceOption historyRetentionFunctionOption = new MultiChoiceOption(
+			"historyRetentionTechnique", 'r', "The history retention function to use.",
+			new String[]{ "FORGET", "QUEUE" },
+			new String[]{ "Forget", "Queue (FIFO)"},
+			QUEUE);
+
+	protected static final int
+			ABSOLUTEDISCOUNTING      = 0,
+			JALINEKMERCERSMOOTHING   = 1,
+			BAYESIANSMOOTHING        = 2,
+			STUPIDBACKOFF            = 3;
+	public MultiChoiceOption smoothingFunctionOption = new MultiChoiceOption(
+			"smoothingTechnique", 'f', "The smoothing function to use.",
+			new String[]{ "ABSOLUTEDISCOUNTING", "JALINEKMERCERSMOOTHING", "BAYESIANSMOOTHING", "STUPIDBACKOFF" },
+			new String[]{ "Absolute Discounting", "Jalinek-Mercer Smoothing", "Bayesian Smoothing", "Stupid Backoff" },
+			STUPIDBACKOFF);
+
+	protected int m_historyTechnique = QUEUE;
+
+	protected int m_foregroundModel = STUPIDBACKOFF;
+
+	public FileOption backgroundDataPathOption = new FileOption("backgroundDataPath",
+			'p', "The Background Data Path parameter.",
+			"", "arff", false);
 
 	public IntOption minWordsInTweetOption = new IntOption("minWordsInTweet",
 			'w', "Min Words in Tweet parameter.",
 			10, 0, 70); // Tweets only have 140 characters => 70 char + space.
 
-	public FloatOption alphaOption = new FloatOption("alpha",
-			'a', "Alpha parameter.",
-			0.1f, 0f, 1f);
+	public FlagOption doStopWordChecking = new FlagOption("doStopWordChecking",
+			'c', "Stop words don't add to the Min Words in Tweet count.");
 
 	public IntOption historySizeOption = new IntOption("historySize",
 			'h', "History Size parameter.",
 			1000, 0, Integer.MAX_VALUE);
 
 	public IntOption tweetIndexOption = new IntOption("tweetIndex",
-			'i', "Tweet Index parameter.",
+			'i', "Tweet Index in data parameter.",
 			0, 0, Integer.MAX_VALUE);
 
 	public StringOption hashTagOption = new StringOption("hashTag", 't', "Hash-Tag parameter.", "");
 
-	public FileOption backgroundDataPathOption = new FileOption("backgroundDataPath",
-			'b', "The Background Data Path parameter.",
-			"", "arff", false);
+	public FloatOption absoluteDiscountingSigmaOption = new FloatOption("absoluteDiscountingSigma",
+			's', "Absolute Discounting Sigma parameter.",
+			0.9f, 0f, 1f);
 
-	protected static final int FORGET = 0, QUEUE = 1;
-	public MultiChoiceOption historyRetentionFunctionOption = new MultiChoiceOption(
-			"historyRetentionTechnique", 'f', "The history retention function to use.", new String[]{
-				"FORGET", "QUEUE" }, new String[]{
-				"Forget",
-				"Queue (FIFO)"}, 1);
+	public FloatOption jalinekMercerSmoothingLambdaOption = new FloatOption("jalinekMercerSmoothingLambda",
+			'j', "Jalinek-Mercer Smoothing Lambda parameter.",
+			0.4f, 0f, 1f);
 
-	protected static final int STUPIDBACKOFF = 0;
-	public MultiChoiceOption smoothingFunctionOption = new MultiChoiceOption(
-			"smoothingTechnique", 's', "The smoothing function to use.", new String[]{
-				"STUPIDBACKOFF" }, new String[]{
-				"Stupid Backoff" }, 0);
+	public FloatOption bayesianSmoothingMuOption = new FloatOption("bayesianSmoothingMu",
+			'b', "Bayesian Smoothing Mu parameter.",
+			10000f, 0f, Float.MAX_VALUE);
 
-	protected int m_historyTechnique = QUEUE;
-
-	protected int m_foregroundModel = STUPIDBACKOFF;
+	public FloatOption stupidBackoffAlphaOption = new FloatOption("stupidBackoffAlpha",
+			'a', "Stupid Backoff Alpha parameter.",
+			0.3f, 0f, 1f);
 
 	/**
 	 * Set the value of Min Words in Tweet to use.
@@ -80,16 +111,70 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	public int getMinWordsInTweet() { return m_minWordsInTweet; }
 
 	/**
-	 * Set the value of alpha to use.
-	 * @param alpha the value of alpha to use.
+	 * Set the value of Do Stop Word Checking.
+	 * @param doStopWordChecking the value of Do Stop Word Checking.
 	 */
-	public void setAlpha(double alpha) { m_alpha = alpha; }
+	public void setDoStopWordChecking(boolean doStopWordChecking) { m_doStopWordChecking = doStopWordChecking; }
 
 	/**
-	 * Get the current value of alpha.
-	 * @return the current value of alpha.
+	 * Get the current value of Do Stop Word Checking.
+	 * @return the current value of Do Stop Word Checking.
 	 */
-	public double getAlpha() { return m_alpha; }
+	public boolean getDoStopWordChecking() { return m_doStopWordChecking; }
+
+	/**
+	 * Set the value of Sigma to use in Absolute Discounting.
+	 * @param absoluteDiscountingSigma the value of Sigma to use in Absolute Discounting.
+	 */
+	public void setAbsoluteDiscountingSigma(double absoluteDiscountingSigma) {
+		m_absoluteDiscountingSigma = absoluteDiscountingSigma;
+	}
+
+	/**
+	 * Get the current value of the Absolute Discounting Sigma.
+	 * @return the current value of the Absolute Discounting Sigma.
+	 */
+	public double getAbsoluteDiscountingSigma() { return m_absoluteDiscountingSigma; }
+
+	/**
+	 * Set the value of Lambda to use in Jalinek-Mercer Smoothing.
+	 * @param jalinekMercerSmoothingLambda the value of Lambda to use in Jalinek-Mercer Smoothing.
+	 */
+	public void setJalinekMercerSmoothingLambda(double jalinekMercerSmoothingLambda) {
+		m_jalinekMercerSmoothingLambda = jalinekMercerSmoothingLambda;
+	}
+
+	/**
+	 * Get the current value of the Jalinek-Mercer Smoothing Lambda.
+	 * @return the current value of the Jalinek-Mercer Smoothing Lambda.
+	 */
+	public double getJalinekMercerSmoothingLambda() { return m_jalinekMercerSmoothingLambda; }
+
+	/**
+	 * Set the value of Mu to use in Bayesian Smoothing.
+	 * @param bayesianSmoothingMu the value of Mu to use in Bayesian Smoothing.
+	 */
+	public void setBayesianSmoothingMu(double bayesianSmoothingMu) {
+		m_bayesianSmoothingMu = bayesianSmoothingMu;
+	}
+
+	/**
+	 * Get the current value of the Bayesian Smoothing Mu.
+	 * @return the current value of the JBayesian Smoothing Mu.
+	 */
+	public double getBayesianSmoothingMu() { return m_bayesianSmoothingMu; }
+
+	/**
+	 * Set the value of Alpha to use in Stupid Backoff.
+	 * @param stupidBackoffAlpha the value of Alpha to use in Stupid Backoff.
+	 */
+	public void setStupidBackoffAlpha(double stupidBackoffAlpha) { m_stupidBackoffAlpha = stupidBackoffAlpha; }
+
+	/**
+	 * Get the current value of the Stupid Backoff Alpha.
+	 * @return the current value of the Stupid Backoff Alpha.
+	 */
+	public double getStupidBackoffAlpha() { return m_stupidBackoffAlpha; }
 
 	/**
 	 * Set the value of history size to use.
@@ -119,13 +204,13 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * Get the current value of the hash-tag to filter by.
 	 * @return the current value of the hash-tag to filter by.
 	 */
-	public String getBackgroundDatapath() { return m_backgroundDatapath; }
+	public String getBackgroundDataPath() { return m_backgroundDataPath; }
 
 	/**
 	 * Set the value of the Background Data path.
 	 * @param backgroundDataPath the value of the Background Data path.
 	 */
-	public void setBackgroundDatapath(String backgroundDataPath) { m_backgroundDatapath = backgroundDataPath; }
+	public void setBackgroundDataPath(String backgroundDataPath) { m_backgroundDataPath = backgroundDataPath; }
 
 	/**
 	 * Get the current value of the hash-tag to filter by.
@@ -181,14 +266,18 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	@Override
 	public void resetLearningImpl() {
 		reset();
+		setHistoryTechnique(this.historyRetentionFunctionOption.getChosenIndex());
+		setSmoothingTechnique(this.smoothingFunctionOption.getChosenIndex());
+		setBackgroundDataPath(this.backgroundDataPathOption.getValue());
 		setMinWordsInTweet(this.minWordsInTweetOption.getValue());
-		setAlpha(this.alphaOption.getValue());
+		setDoStopWordChecking(this.doStopWordChecking.isSet());
+		setAbsoluteDiscountingSigma(this.absoluteDiscountingSigmaOption.getValue());
+		setJalinekMercerSmoothingLambda(this.jalinekMercerSmoothingLambdaOption.getValue());
+		setBayesianSmoothingMu(this.bayesianSmoothingMuOption.getValue());
+		setStupidBackoffAlpha(this.stupidBackoffAlphaOption.getValue());
 		setHistorySize(this.historySizeOption.getValue());
 		setTweetIndex(this.tweetIndexOption.getValue());
 		setHashTag(this.hashTagOption.getValue());
-		setBackgroundDatapath(this.backgroundDataPathOption.getValue());
-		setHistoryTechnique(this.historyRetentionFunctionOption.getChosenIndex());
-		setSmoothingTechnique(this.smoothingFunctionOption.getChosenIndex());
 	}
 
 	/**
@@ -221,12 +310,21 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * @return Returns the index of the hash-tag or -1 if tweet is invalid.
 	 */
 	protected int filterTweet(List<String> tweet) {
-		// TODO: Add in not counting stop words, and setting min # of words.
-		// Check tweet length isn't too small, skip the tweet if it is, +1 to account for the hash-tag.
-		if (tweet.size() < this.getMinWordsInTweet() + 1)
+		int wordCount = 0;
+		if (this.getDoStopWordChecking()) {
+			for (String word : tweet) {
+				if (!SmoothingTechnique.StopWords.contains(word))
+					wordCount++;
+			}
+		}
+		else {
+			wordCount = tweet.size();
+		}
+
+		if (wordCount < this.getMinWordsInTweet() + 1)
 			return -1;
 
-		return tweet.indexOf(this.m_hashTag);
+		return tweet.indexOf(this.getHashTag());
 	}
 
 	protected void initializeForegroundModel() {
@@ -249,8 +347,25 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 
 		// Initialize the specified foreground model.
 		switch (this.getSmoothingTechnique()) {
-			case STUPIDBACKOFF : this.foregroundModel = new StupidBackoff(backgroundModel, history, this.getAlpha()); break;
-			default : this.foregroundModel = new StupidBackoff(backgroundModel, history, this.getAlpha());
+			case ABSOLUTEDISCOUNTING :
+				this.foregroundModel =
+						new AbsoluteDiscounting(backgroundModel, history, this.getAbsoluteDiscountingSigma());
+				break;
+			case JALINEKMERCERSMOOTHING :
+				this.foregroundModel =
+						new JalinekMercerSmoothing(backgroundModel, history, this.getJalinekMercerSmoothingLambda());
+				break;
+			case BAYESIANSMOOTHING :
+				this.foregroundModel =
+						new BayesianSmoothing(backgroundModel, history, this.getBayesianSmoothingMu());
+				break;
+			case STUPIDBACKOFF :
+				this.foregroundModel =
+						new StupidBackoff(backgroundModel, history, this.getStupidBackoffAlpha());
+				break;
+			default :
+				this.foregroundModel =
+						new StupidBackoff(backgroundModel, history, this.getStupidBackoffAlpha());
 		}
 	}
 
@@ -298,7 +413,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * @param inst the instance to be classified.
 	 * @return predicted class probability distribution.
 	 */
-    //TODO:
+	//TODO:
 	@Override
 	public double[] getVotesForInstance(Instance inst) {
 		if (this.foregroundModel == null)
@@ -320,7 +435,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * Prints out the classifier.
 	 * @return a description of the classifier as a string.
 	 */
-    //TODO:
+	//TODO:
 	public String toString() { return "todo"; }
 
 	@Override
