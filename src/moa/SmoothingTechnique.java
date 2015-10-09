@@ -20,11 +20,14 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	/** For serialization */
 	private static final long serialVersionUID = 123456l;
 
+	// Stop words all lower case.
 	private static final Set<String> StopWords = new HashSet<>(Arrays.asList(
-			new String[] { "I", "a", "about", "an", "are", "as", "at", "be", "by", "com",
+			new String[] { "i", "a", "about", "an", "are", "as", "at", "be", "by", "com",
 					"for", "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "what",
 					"when", "where", "who", "will", "with", "the", "www" }
 	));
+
+	private static final String Punctuation = "\"'.:-!?,;";
 
 	protected int m_minWordsInTweet = 5;
 	protected boolean m_doStopWordChecking = true;
@@ -310,6 +313,15 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * @return Returns the index of the hash-tag or -1 if tweet is invalid.
 	 */
 	protected int filterTweet(List<String> tweet) {
+		// Sanitize input.
+		List<String> newTweet = new ArrayList<>();
+		for (String word : tweet) {
+			word = word.replaceAll("[" + SmoothingTechnique.Punctuation + "]+$", "");
+			if (!word.isEmpty())
+				newTweet.add(word);
+		}
+		tweet = newTweet;
+
 		int wordCount = 0;
 		if (this.getDoStopWordChecking()) {
 			for (String word : tweet) {
