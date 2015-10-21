@@ -347,11 +347,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 			if (word.isEmpty())
 				continue;
 
-			word = word.replaceAll("[^a-zA-Z]+$", "");
-
-			if (word.isEmpty())
-				continue;
-
 			// Skip re-adding the hash-tag.
 			if (word.equals(this.getHashTag())) {
 				changed = true;
