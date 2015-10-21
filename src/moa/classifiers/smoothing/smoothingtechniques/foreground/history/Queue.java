@@ -1,4 +1,4 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques.foreground.history;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -33,7 +33,7 @@ public class Queue extends HistoryRetentionTechnique {
 	}
 
 	protected void removeWord(String word) {
-		super.set.put(word, this.set.get(word) + 1);
+		super.set.put(word, this.set.get(word) - 1);
 		super.totalCount--;
 	}
 

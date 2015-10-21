@@ -1,4 +1,7 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques.foreground;
+
+import moa.classifiers.smoothing.smoothingtechniques.BackgroundModel;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.history.HistoryRetentionTechnique;
 
 import java.util.List;
 
@@ -6,10 +9,15 @@ public abstract class ForegroundModel {
 
 	protected final BackgroundModel bm;
 	protected final HistoryRetentionTechnique history;
+	protected final double threshold;
+	protected static final double log2 = Math.log(2);
 
-	public ForegroundModel(final BackgroundModel bm, final HistoryRetentionTechnique history) {
+	public ForegroundModel(final BackgroundModel bm,
+						   final HistoryRetentionTechnique history,
+						   final double threshold) {
 		this.bm = bm;
 		this.history = history;
+		this.threshold = threshold;
 	}
 
 	/**
@@ -21,7 +29,7 @@ public abstract class ForegroundModel {
 		this.history.addTweet(tweet);
 	}
 
-	// The specific foreground models' probability calculation.
+	// The specific foreground models probability calculation.
 	protected abstract double getProbability(String word);
 
 	/**
@@ -35,10 +43,17 @@ public abstract class ForegroundModel {
 		for (String w : tweet)
 			sum += Math.log(this.getProbability(w));
 
-		sum /= tweet.size();
+		// Make it log base 2 and 1 / N
+		sum /= (ForegroundModel.log2 * tweet.size());
 		sum *= -1;
 
 		return Math.pow(2, sum);
+	}
+
+	//todo:
+	public final boolean getClassification(List<String> tweet) {
+		double perplexity = this.getPerplexity(tweet);
+		return perplexity > this.threshold;
 	}
 
 	/**

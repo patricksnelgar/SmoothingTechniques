@@ -1,4 +1,4 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques.foreground.history;
 
 public class Forget extends HistoryRetentionTechnique {
 

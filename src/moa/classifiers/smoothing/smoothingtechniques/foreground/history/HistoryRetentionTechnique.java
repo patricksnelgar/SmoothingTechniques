@@ -1,4 +1,4 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques.foreground.history;
 
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +39,7 @@ public abstract class HistoryRetentionTechnique {
 	public final void addWord(final String word) {
 		Integer count = this.set.get(word);
 		if (count == null) this.set.put(word, 1);
-		else this.set.put(word, ++count);
+		else this.set.put(word, count + 1);
 		this.totalCount++;
 	}
 
@@ -49,11 +49,13 @@ public abstract class HistoryRetentionTechnique {
 		return this.set.containsKey(word) ? this.set.get(word) : 0;
 	}
 
-	public final int getTotalCount() {
+	public final int getAllWordsCounts() {
 		return this.totalCount;
 	}
 
-	public final int getTotalUniqueWordCount() { return this.set.size(); }
+	public final int getTotalUniqueWordCount() {
+		return this.set.size();
+	}
 
 	/**
 	 * Clears the current history.

@@ -1,20 +1,21 @@
-package moa;
+package moa.classifiers.smoothing;
 
 import moa.classifiers.AbstractClassifier;
-import moa.classifiers.Regressor;
+import moa.classifiers.Classifier;
+import moa.classifiers.smoothing.smoothingtechniques.*;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.*;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.history.Forget;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.history.HistoryRetentionTechnique;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.history.Queue;
 import moa.core.Measurement;
 import moa.core.StringUtils;
 import moa.options.*;
-import moa.smoothingtechniques.*;
-import moa.smoothingtechniques.Queue;
+import moa.streams.ArffFileStream;
 import weka.core.Instance;
-import weka.core.Instances;
-import weka.core.converters.ArffLoader;
 
-import java.io.*;
 import java.util.*;
 
-public class SmoothingTechnique extends AbstractClassifier implements Regressor {
+public class SmoothingTechnique extends AbstractClassifier implements Classifier {
 
 	//TODO: generate new UID.
 	/** For serialization */
@@ -30,14 +31,16 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	private static final String Punctuation = "\"'.:-!?,;";
 
 	protected int m_minWordsInTweet = 5;
-	protected boolean m_doStopWordChecking = true;
-	protected double m_absoluteDiscountingSigma = 0.9;
-	protected double m_jalinekMercerSmoothingLambda = 0.4;
-	protected double m_bayesianSmoothingMu = 10000;
-	protected double m_stupidBackoffAlpha = 0.3;
+	protected boolean m_doStopWordChecking = false;
+	protected double m_absoluteDiscountingSigma = 0.9d;
+	protected double m_jalinekMercerSmoothingLambda = 0.4d;
+	protected double m_bayesianSmoothingMu = 10000d;
+	protected double m_stupidBackoffAlpha = 0.3d;
+	protected double m_threshold = 1000d;
 	protected int m_historySize = 1000;
 	protected int m_tweetIndex = 0;
 	protected String m_hashTag = "";
+	protected List<String> hashTagColl = null;
 	protected String m_backgroundDataPath = "";
 
 	protected static final int
@@ -78,6 +81,11 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	public IntOption historySizeOption = new IntOption("historySize",
 			'h', "History Size parameter.",
 			1000, 0, Integer.MAX_VALUE);
+
+	public FloatOption thresholdOption = new FloatOption("threshold",
+			'm', "Threshold parameter.",
+			1000f, 0f, Float.MAX_VALUE);
+
 
 	public IntOption tweetIndexOption = new IntOption("tweetIndex",
 			'i', "Tweet Index in data parameter.",
@@ -192,6 +200,18 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	public int getHistorySize() { return m_historySize; }
 
 	/**
+	 * Set the value of threshold to use.
+	 * @param threshold the value of threshold to use.
+	 */
+	public void setThreshold(double threshold) { m_threshold = threshold; }
+
+	/**
+	 * Get the current value of threshold.
+	 * @return the current value of threshold.
+	 */
+	public double getThreshold() { return m_threshold; }
+
+	/**
 	 * Get the current value of the tweet index.
 	 * @return the current value of the tweet index.
 	 */
@@ -230,7 +250,12 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	public void setHashTag(String hashTag) {
 		if (hashTag != null && hashTag.length() > 0 && !hashTag.startsWith("#"))
 			hashTag = "#" + hashTag;	// Ensure that there is a hash-tag on the query tag.
-		m_hashTag = hashTag;
+		m_hashTag = hashTag != null ? hashTag.toLowerCase() : "";
+		if (this.hashTagColl == null)
+			this.hashTagColl = new ArrayList<>();
+		else
+			this.hashTagColl.clear();
+		this.hashTagColl.add(m_hashTag);
 	}
 
 	/**
@@ -279,6 +304,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 		setBayesianSmoothingMu(this.bayesianSmoothingMuOption.getValue());
 		setStupidBackoffAlpha(this.stupidBackoffAlphaOption.getValue());
 		setHistorySize(this.historySizeOption.getValue());
+		setThreshold(this.thresholdOption.getValue());
 		setTweetIndex(this.tweetIndexOption.getValue());
 		setHashTag(this.hashTagOption.getValue());
 	}
@@ -293,17 +319,13 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 			initializeForegroundModel();
 
 		String instanceTweet =  inst.stringValue(this.getTweetIndex()).toLowerCase();
-		List<String> tweet = new ArrayList<>(Arrays.asList(instanceTweet.split(" ")));
+		List<String> tweet = Arrays.asList(instanceTweet.split(" "));
 
 		/* Check if the tweet conditions are met. */
-		int index = this.filterTweet(tweet);
-		if (index < 0) return;
-		tweet.remove(index);
+		if ((tweet = this.filterTweet(tweet, true)) == null)
+			return;
 
-		/* Intrinsic Evaluation - Perplexity (Called in this.getVotesForInstance()) */
-		//double perplexity = this.foregroundModel.getPerplexity(tweet);
-
-		// Update foreground model with new tweet.
+		// Update foreground model with new tweet if relevant.
 		this.foregroundModel.addTweet(tweet);
 	}
 
@@ -312,42 +334,61 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * @param tweet The tweet t
 	 * @return Returns the index of the hash-tag or -1 if tweet is invalid.
 	 */
-	protected int filterTweet(List<String> tweet) {
+	protected List<String> filterTweet(List<String> tweet, boolean isTrain) {
 		// Sanitize input.
+		boolean changed = false;
 		List<String> newTweet = new ArrayList<>();
 		for (String word : tweet) {
-			word = word.replaceAll("[" + SmoothingTechnique.Punctuation + "]+$", "");
-			if (!word.isEmpty())
-				newTweet.add(word);
+			if (word.isEmpty())
+				continue;
+			// Filter leading and trailing punctuation.
+			word = word.replaceAll("^[^a-zA-Z#]+", "");
+
+			if (word.isEmpty())
+				continue;
+
+			word = word.replaceAll("[^a-zA-Z]+$", "");
+
+			if (word.isEmpty())
+				continue;
+
+			// Skip re-adding the hash-tag.
+			if (word.equals(this.getHashTag())) {
+				changed = true;
+				continue;
+			}
+
+			newTweet.add(word);
 		}
 		tweet = newTweet;
 
+		// If classify, return the tweet cleaned and without hash-tag.
+		if (!isTrain)
+			return tweet;
+
+		// Else is train, check length and that the tweet actually did have the hash-tag.
+		if (!changed)   // Hash-tag wasn't in tweet, don't train using tweet.
+			return null;
+
 		int wordCount = 0;
-		if (this.getDoStopWordChecking()) {
+		if (!this.getDoStopWordChecking()) {
+			wordCount = tweet.size();
+		}
+		else {
 			for (String word : tweet) {
 				if (!SmoothingTechnique.StopWords.contains(word))
 					wordCount++;
 			}
 		}
-		else {
-			wordCount = tweet.size();
-		}
 
-		if (wordCount < this.getMinWordsInTweet() + 1)
-			return -1;
+		if (wordCount < this.getMinWordsInTweet())
+			return null;
 
-		return tweet.indexOf(this.getHashTag());
+		return tweet;
 	}
 
 	protected void initializeForegroundModel() {
-		File backgroundFile = this.backgroundDataPathOption.getFile();
-
-		BackgroundModel backgroundModel = null;
-		try {
-			backgroundModel = this.initializeBackgroundModel(backgroundFile, this.getTweetIndex());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		BackgroundModel backgroundModel = this.initializeBackgroundModel();
 
 		// Initialize the specified History Retention Technique.
 		HistoryRetentionTechnique history;
@@ -361,58 +402,43 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 		switch (this.getSmoothingTechnique()) {
 			case ABSOLUTEDISCOUNTING :
 				this.foregroundModel =
-						new AbsoluteDiscounting(backgroundModel, history, this.getAbsoluteDiscountingSigma());
+						new AbsoluteDiscounting(backgroundModel, history, this.getThreshold(),
+								this.getAbsoluteDiscountingSigma());
 				break;
 			case JALINEKMERCERSMOOTHING :
 				this.foregroundModel =
-						new JalinekMercerSmoothing(backgroundModel, history, this.getJalinekMercerSmoothingLambda());
+						new JalinekMercerSmoothing(backgroundModel, history, this.getThreshold(),
+								this.getJalinekMercerSmoothingLambda());
 				break;
 			case BAYESIANSMOOTHING :
 				this.foregroundModel =
-						new BayesianSmoothing(backgroundModel, history, this.getBayesianSmoothingMu());
+						new BayesianSmoothing(backgroundModel, history, this.getThreshold(),
+								this.getBayesianSmoothingMu());
 				break;
 			case STUPIDBACKOFF :
 				this.foregroundModel =
-						new StupidBackoff(backgroundModel, history, this.getStupidBackoffAlpha());
+						new StupidBackoff(backgroundModel, history, this.getThreshold(),
+								this.getStupidBackoffAlpha());
 				break;
 			default :
 				this.foregroundModel =
-						new StupidBackoff(backgroundModel, history, this.getStupidBackoffAlpha());
+						new StupidBackoff(backgroundModel, history, this.getThreshold(),
+								this.getStupidBackoffAlpha());
 		}
 	}
 
-	protected BackgroundModel initializeBackgroundModel(File file, int tweetIndex) throws IOException {
+	protected BackgroundModel initializeBackgroundModel() {
 		List<String> backgroundWords = new ArrayList<>();
-		BufferedReader reader = null;
+		ArffFileStream stream = new ArffFileStream(this.backgroundDataPathOption.getValue(), -1);
+		int tweetIndex = this.getTweetIndex();
+		while (stream.hasMoreInstances()) {
+			String tweet = stream.nextInstance().stringValue(tweetIndex).toLowerCase();
+			List<String> tweetWords = Arrays.asList(tweet.split(" "));
+			// Invalid tweet.
+			if ((tweetWords = this.filterTweet(tweetWords, true)) == null)
+				continue;
 
-		try {
-			reader = new BufferedReader(new FileReader(file));
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
-
-		if (reader == null)
-			throw new IOException("File not found or able to be opened.");
-
-		try {
-			ArffLoader.ArffReader arff = new ArffLoader.ArffReader(reader);
-			Instances data = arff.getStructure();
-			Instance param;
-			while ((param = arff.readInstance(data)) != null) {
-				String tweet = param.stringValue(tweetIndex);
-				List<String> tweetWords = new ArrayList<>(Arrays.asList(tweet.split(" ")));
-				int index = this.filterTweet(tweetWords);
-				// Invalid tweet.
-				if (index < 0) continue;
-				tweetWords.remove(index);
-
-				backgroundWords.addAll(tweetWords);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		finally {
-			reader.close();
+			backgroundWords.addAll(tweetWords);
 		}
 
 		BackgroundModel backgroundModel = new BackgroundModel();
@@ -425,7 +451,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	 * @param inst the instance to be classified.
 	 * @return predicted class probability distribution.
 	 */
-	//TODO:
 	@Override
 	public double[] getVotesForInstance(Instance inst) {
 		if (this.foregroundModel == null)
@@ -435,13 +460,28 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 		List<String> tweet = new ArrayList<>(Arrays.asList(instanceTweet.split(" ")));
 
 		/* Check if the tweet conditions are met. */
-		int index = this.filterTweet(tweet);
-		if (index < 0) return new double[] { 0 };
-		tweet.remove(index);
+		tweet = this.filterTweet(tweet, false);
 
-		/* Intrinsic Evaluation - Perplexity */
-		return new double[] {this.foregroundModel.getPerplexity(tweet)};
+		// If 1 predicts (1 - 1, 1) (0, 1) (so class 1) else predicts (1 - 0,0) (1, 0) (so class 0)
+		double classification = this.foregroundModel.getClassification(tweet) ? 1d : 0d;
+
+		/* Precision Recall */
+
+		if (classification == 1) {
+			// Total positive classifications.
+			this.positive++;
+			// Total correct positive classifications.
+			if (inst.classValue() == 1)
+				this.truePositive++;
+		}
+		// Total of positive class.
+		if (inst.classValue() == 1)
+			this.relevant++;
+
+		return new double[] { 1 - classification, classification };
 	}
+
+	double truePositive = 0, positive = 0, relevant = 0;
 
 	/**
 	 * Prints out the classifier.
@@ -450,8 +490,17 @@ public class SmoothingTechnique extends AbstractClassifier implements Regressor 
 	//TODO:
 	public String toString() { return "todo"; }
 
+
 	@Override
-	protected Measurement[] getModelMeasurementsImpl() { return null; }
+	protected Measurement[] getModelMeasurementsImpl() {
+		double precision = this.truePositive / this.positive;
+		double recall = this.truePositive / this.relevant;
+
+		return new Measurement[]{
+				new Measurement("Precision", precision),
+				new Measurement("Recall", recall)
+		};
+	}
 
 	@Override
 	public void getModelDescription(StringBuilder out, int indent) {

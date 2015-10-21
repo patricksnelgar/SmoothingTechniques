@@ -1,12 +1,13 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public class BackgroundModel {
 
-	private static final int VocabularyRestrictCount = 10;
+	private static final int VocabularyRestrictCount = 0;//TODO: reset to higher number. 10;
 
 	private int totalCount;
 	private final Map<String, Double> probabilities;
@@ -54,11 +55,13 @@ public class BackgroundModel {
 
 	protected void calcProbabilities() {
 		double total = this.totalCount;
-		for (Map.Entry<String, Double> entry : this.probabilities.entrySet()) {
+		for (Iterator<Map.Entry<String, Double>> it = this.probabilities.entrySet().iterator(); it.hasNext(); ) {
+			Map.Entry<String, Double> entry = it.next();
 			if (entry.getValue() <= BackgroundModel.VocabularyRestrictCount)
-				this.probabilities.remove(entry.getKey());
+				it.remove();
 			else
+			// TODO: faster way than divide all values? have hash map of already computed divides? Dynamic programming?
 				this.probabilities.put(entry.getKey(), (entry.getValue() / total));
 		}
-   }
+	}
 }

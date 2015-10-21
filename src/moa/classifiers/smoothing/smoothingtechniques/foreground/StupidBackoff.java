@@ -1,11 +1,17 @@
-package moa.smoothingtechniques;
+package moa.classifiers.smoothing.smoothingtechniques.foreground;
+
+import moa.classifiers.smoothing.smoothingtechniques.BackgroundModel;
+import moa.classifiers.smoothing.smoothingtechniques.foreground.history.HistoryRetentionTechnique;
 
 public class StupidBackoff extends ForegroundModel {
 
 	protected final double alpha, normalizeCount, normalizeProbability;
 
-	public StupidBackoff(final BackgroundModel bm, final HistoryRetentionTechnique history, final double alpha) {
-		super(bm, history);
+	public StupidBackoff(final BackgroundModel bm,
+						 final HistoryRetentionTechnique history,
+						 final double threshold,
+						 final double alpha) {
+		super(bm, history, threshold);
 
 		this.alpha = alpha;
 		this.normalizeCount = 1f / (1f + alpha);
@@ -18,7 +24,7 @@ public class StupidBackoff extends ForegroundModel {
 		int currWordCount = this.history.getWordCount(word);
 		if (currWordCount == 0)
 			return this.normalizeProbability * this.bm.getProbability(word);
-		return this.normalizeCount * ((double)currWordCount / this.history.getTotalCount());
+		return this.normalizeCount * ((double)currWordCount / this.history.getAllWordsCounts());
 	}
 
 	/**
@@ -30,6 +36,6 @@ public class StupidBackoff extends ForegroundModel {
 		int currWordCount = this.history.getWordCount(word);
 		if (currWordCount <= 0)
 			return this.alpha * this.bm.getProbability(word);
-		return ((double)currWordCount / this.history.getTotalCount());
+		return ((double)currWordCount / this.history.getAllWordsCounts());
 	}
 }
