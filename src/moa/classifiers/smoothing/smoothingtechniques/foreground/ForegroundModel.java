@@ -38,11 +38,14 @@ public abstract class ForegroundModel {
 	 * @return The perplexity of the given tweet.
 	 */
 	public final double getPerplexity(List<String> tweet) {
-		double sum = 0d;
+		double sum = 0d, prob;
 
-		for (String w : tweet)
-			sum += Math.log(this.getProbability(w));
-
+		for (String w : tweet) {
+			prob = this.getProbability(w);
+			if (prob == 0d)
+				continue;
+			sum += Math.log(prob);
+		}
 		// Make it log base 2 and 1 / N
 		sum /= (ForegroundModel.log2 * tweet.size());
 		sum *= -1;

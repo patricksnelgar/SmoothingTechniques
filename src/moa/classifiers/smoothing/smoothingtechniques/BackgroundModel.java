@@ -1,13 +1,18 @@
 package moa.classifiers.smoothing.smoothingtechniques;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class BackgroundModel {
 
-	private static final int VocabularyRestrictCount = 0;//TODO: reset to higher number. 10;
+	private static final double VocabularyRestrictCount = 10d;
+	private static final double sigma = 0.5d;
+
+	// Stop words all lower case.
+	private static final Set<String> StopWords = new HashSet<>(Arrays.asList(
+			new String[] { "i", "a", "about", "an", "are", "as", "at", "be", "by", "com",
+					"for", "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "what",
+					"when", "where", "who", "will", "with", "the", "www" }
+	));
 
 	private int totalCount;
 	private final Map<String, Double> probabilities;
@@ -23,8 +28,11 @@ public class BackgroundModel {
 	 */
 	public void buildProbabilities(List<String> words) {
 		this.reset();
-		for (String word : words)
-			this.addOccurrence(word);
+		for (String word : words) {
+			//  Skip stop words in BM.
+			if (!BackgroundModel.StopWords.contains((word)))
+				this.addOccurrence(word);
+		}
 		this.calcProbabilities();
 	}
 
@@ -57,11 +65,13 @@ public class BackgroundModel {
 		double total = this.totalCount;
 		for (Iterator<Map.Entry<String, Double>> it = this.probabilities.entrySet().iterator(); it.hasNext(); ) {
 			Map.Entry<String, Double> entry = it.next();
-			if (entry.getValue() <= BackgroundModel.VocabularyRestrictCount)
+			double wordCount = entry.getValue();
+			if (wordCount <= BackgroundModel.VocabularyRestrictCount) {
 				it.remove();
-			else
-			// TODO: faster way than divide all values? have hash map of already computed divides? Dynamic programming?
-				this.probabilities.put(entry.getKey(), (entry.getValue() / total));
+				continue;
+			}
+			double prob = Math.max(wordCount - BackgroundModel.sigma, 0d) / total;
+			this.probabilities.put(entry.getKey(), prob);
 		}
 	}
 }

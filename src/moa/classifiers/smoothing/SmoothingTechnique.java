@@ -21,26 +21,17 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	/** For serialization */
 	private static final long serialVersionUID = 123456l;
 
-	// Stop words all lower case.
-	private static final Set<String> StopWords = new HashSet<>(Arrays.asList(
-			new String[] { "i", "a", "about", "an", "are", "as", "at", "be", "by", "com",
-					"for", "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "what",
-					"when", "where", "who", "will", "with", "the", "www" }
-	));
-
 	private static final String Punctuation = "\"'.:-!?,;";
 
 	protected int m_minWordsInTweet = 5;
-	protected boolean m_doStopWordChecking = false;
 	protected double m_absoluteDiscountingSigma = 0.9d;
 	protected double m_jalinekMercerSmoothingLambda = 0.4d;
 	protected double m_bayesianSmoothingMu = 10000d;
 	protected double m_stupidBackoffAlpha = 0.3d;
-	protected double m_threshold = 1000d;
+	protected double m_threshold = 200d;
 	protected int m_historySize = 1000;
 	protected int m_tweetIndex = 0;
 	protected String m_hashTag = "";
-	protected List<String> hashTagColl = null;
 	protected String m_backgroundDataPath = "";
 
 	protected static final int
@@ -74,9 +65,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	public IntOption minWordsInTweetOption = new IntOption("minWordsInTweet",
 			'w', "Min Words in Tweet parameter.",
 			10, 0, 70); // Tweets only have 140 characters => 70 char + space.
-
-	public FlagOption doStopWordChecking = new FlagOption("doStopWordChecking",
-			'c', "Stop words don't add to the Min Words in Tweet count.");
 
 	public IntOption historySizeOption = new IntOption("historySize",
 			'h', "History Size parameter.",
@@ -120,18 +108,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	 * @return the current value of Min Words in Tweet.
 	 */
 	public int getMinWordsInTweet() { return m_minWordsInTweet; }
-
-	/**
-	 * Set the value of Do Stop Word Checking.
-	 * @param doStopWordChecking the value of Do Stop Word Checking.
-	 */
-	public void setDoStopWordChecking(boolean doStopWordChecking) { m_doStopWordChecking = doStopWordChecking; }
-
-	/**
-	 * Get the current value of Do Stop Word Checking.
-	 * @return the current value of Do Stop Word Checking.
-	 */
-	public boolean getDoStopWordChecking() { return m_doStopWordChecking; }
 
 	/**
 	 * Set the value of Sigma to use in Absolute Discounting.
@@ -251,11 +227,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		if (hashTag != null && hashTag.length() > 0 && !hashTag.startsWith("#"))
 			hashTag = "#" + hashTag;	// Ensure that there is a hash-tag on the query tag.
 		m_hashTag = hashTag != null ? hashTag.toLowerCase() : "";
-		if (this.hashTagColl == null)
-			this.hashTagColl = new ArrayList<>();
-		else
-			this.hashTagColl.clear();
-		this.hashTagColl.add(m_hashTag);
 	}
 
 	/**
@@ -298,7 +269,6 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		setSmoothingTechnique(this.smoothingFunctionOption.getChosenIndex());
 		setBackgroundDataPath(this.backgroundDataPathOption.getValue());
 		setMinWordsInTweet(this.minWordsInTweetOption.getValue());
-		setDoStopWordChecking(this.doStopWordChecking.isSet());
 		setAbsoluteDiscountingSigma(this.absoluteDiscountingSigmaOption.getValue());
 		setJalinekMercerSmoothingLambda(this.jalinekMercerSmoothingLambdaOption.getValue());
 		setBayesianSmoothingMu(this.bayesianSmoothingMuOption.getValue());
@@ -357,7 +327,17 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		}
 		tweet = newTweet;
 
-		// If classify, return the tweet cleaned and without hash-tag.
+		// Count non-hash-tag words.
+		int wordCount = 0;
+		for(String w : tweet) {
+			if (!w.startsWith("#"))
+				wordCount++;
+		}
+
+		if (wordCount < this.getMinWordsInTweet())
+			return null;
+
+		// If classify, return the tweet cleaned and without topic of interest hash-tag.
 		if (!isTrain)
 			return tweet;
 
@@ -365,15 +345,11 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		if (!changed)   // Hash-tag wasn't in tweet, don't train using tweet.
 			return null;
 
-		int wordCount = 0;
-		if (!this.getDoStopWordChecking()) {
-			wordCount = tweet.size();
-		}
-		else {
-			for (String word : tweet) {
-				if (!SmoothingTechnique.StopWords.contains(word))
-					wordCount++;
-			}
+		wordCount = 0;
+		// Count non-hash-tag words.
+		for(String w : tweet) {
+			if (!w.startsWith("#"))
+				wordCount++;
 		}
 
 		if (wordCount < this.getMinWordsInTweet())
@@ -456,27 +432,26 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 
 		/* Check if the tweet conditions are met. */
 		tweet = this.filterTweet(tweet, false);
+		if (tweet == null)
+			return new double[0];
 
 		// If 1 predicts (1 - 1, 1) (0, 1) (so class 1) else predicts (1 - 0,0) (1, 0) (so class 0)
 		double classification = this.foregroundModel.getClassification(tweet) ? 1d : 0d;
 
 		/* Precision Recall */
-
-		if (classification == 1) {
-			// Total positive classifications.
-			this.positive++;
-			// Total correct positive classifications.
+		if (classification == 1)
 			if (inst.classValue() == 1)
 				this.truePositive++;
-		}
-		// Total of positive class.
-		if (inst.classValue() == 1)
-			this.relevant++;
+			else
+				this.falsePositive++;
+		else
+			if (inst.classValue() == 1)
+				this.falseNegative++;
+			else
+				this.trueNegative++;
 
 		return new double[] { 1 - classification, classification };
 	}
-
-	double truePositive = 0, positive = 0, relevant = 0;
 
 	/**
 	 * Prints out the classifier.
@@ -485,15 +460,23 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	//TODO:
 	public String toString() { return "todo"; }
 
+	double truePositive = 0, trueNegative = 0, falsePositive = 0, falseNegative = 0;
 
 	@Override
 	protected Measurement[] getModelMeasurementsImpl() {
-		double precision = this.truePositive / this.positive;
-		double recall = this.truePositive / this.relevant;
+		final double tpfp = this.truePositive + this.falsePositive,
+				tpfn = this.truePositive + this.falseNegative,
+				totalSeen = this.trueNegative + this.truePositive + this.falseNegative + this.falsePositive;
+
+		double precision = tpfp == 0d ? 0d : this.truePositive / tpfp;
+		double recall = tpfn == 0d ? 0d : this.truePositive / tpfn;
+
+		double accuracy = totalSeen == 0d ? 0d : (this.trueNegative + this.truePositive) / totalSeen;
 
 		return new Measurement[]{
 				new Measurement("Precision", precision),
-				new Measurement("Recall", recall)
+				new Measurement("Recall", recall),
+				new Measurement("Accuracy", accuracy)
 		};
 	}
 
