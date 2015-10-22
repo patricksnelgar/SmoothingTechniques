@@ -47,11 +47,14 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 			ABSOLUTEDISCOUNTING      = 0,
 			JALINEKMERCERSMOOTHING   = 1,
 			BAYESIANSMOOTHING        = 2,
-			STUPIDBACKOFF            = 3;
+			STUPIDBACKOFF            = 3,
+			BACKGROUNDONLY           = 4;
 	public MultiChoiceOption smoothingFunctionOption = new MultiChoiceOption(
 			"smoothingTechnique", 'f', "The smoothing function to use.",
-			new String[]{ "ABSOLUTEDISCOUNTING", "JALINEKMERCERSMOOTHING", "BAYESIANSMOOTHING", "STUPIDBACKOFF" },
-			new String[]{ "Absolute Discounting", "Jalinek-Mercer Smoothing", "Bayesian Smoothing", "Stupid Backoff" },
+			new String[]{ "ABSOLUTEDISCOUNTING", "JALINEKMERCERSMOOTHING", "BAYESIANSMOOTHING", "STUPIDBACKOFF",
+					"BACKGROUNDONLY" },
+			new String[]{ "Absolute Discounting", "Jalinek-Mercer Smoothing", "Bayesian Smoothing", "Stupid Backoff",
+					"Background Only" },
 			STUPIDBACKOFF);
 
 	protected int m_historyTechnique = QUEUE;
@@ -390,6 +393,10 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 				this.foregroundModel =
 						new StupidBackoff(backgroundModel, history, this.getThreshold(),
 								this.getStupidBackoffAlpha());
+				break;
+			case BACKGROUNDONLY :
+				this.foregroundModel =
+						new BackgroundOnly(backgroundModel, history, this.getThreshold());
 				break;
 			default :
 				this.foregroundModel =
