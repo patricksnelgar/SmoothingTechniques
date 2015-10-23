@@ -33,6 +33,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	protected int m_tweetIndex = 0;
 	protected String m_hashTag = "";
 	protected String m_backgroundDataPath = "";
+	protected int m_bmDataClassIndex = -1;
 
 	protected static final int
 			FORGET  = 0,
@@ -64,6 +65,10 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	public FileOption backgroundDataPathOption = new FileOption("backgroundDataPath",
 			'p', "The Background Data Path parameter.",
 			"", "arff", false);
+
+	public IntOption bmClassIndexOption = new IntOption("bmClassIndex",
+			'c', "The index of the class attribute in the BM data-set, -1 equals the last attribute is the class",
+			-1, -1, Integer.MAX_VALUE);
 
 	public IntOption minWordsInTweetOption = new IntOption("minWordsInTweet",
 			'w', "Min Words in Tweet parameter.",
@@ -218,6 +223,18 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	 * Get the current value of the hash-tag to filter by.
 	 * @return the current value of the hash-tag to filter by.
 	 */
+	public int getBmClassIndex() { return m_bmDataClassIndex; }
+
+	/**
+	 * Set the value of the Background Data path.
+	 * @param bmDataClassIndex the value of the Background Data path.
+	 */
+	public void setBmClassIndex(int bmDataClassIndex) { m_bmDataClassIndex = bmDataClassIndex; }
+
+	/**
+	 * Get the current value of the hash-tag to filter by.
+	 * @return the current value of the hash-tag to filter by.
+	 */
 	public String getHashTag() {
 		return m_hashTag;
 	}
@@ -271,6 +288,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		setHistoryTechnique(this.historyRetentionFunctionOption.getChosenIndex());
 		setSmoothingTechnique(this.smoothingFunctionOption.getChosenIndex());
 		setBackgroundDataPath(this.backgroundDataPathOption.getValue());
+		setBmClassIndex(this.bmClassIndexOption.getValue());
 		setMinWordsInTweet(this.minWordsInTweetOption.getValue());
 		setAbsoluteDiscountingSigma(this.absoluteDiscountingDeltaOption.getValue());
 		setJalinekMercerSmoothingLambda(this.jalinekMercerSmoothingLambdaOption.getValue());
@@ -407,7 +425,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 
 	protected BackgroundModel initializeBackgroundModel() {
 		List<String> backgroundWords = new ArrayList<>();
-		ArffFileStream stream = new ArffFileStream(this.backgroundDataPathOption.getValue(), -1);
+		ArffFileStream stream = new ArffFileStream(this.backgroundDataPathOption.getValue(), this.getBmClassIndex());
 		int tweetIndex = this.getTweetIndex();
 		while (stream.hasMoreInstances()) {
 			String tweet = stream.nextInstance().stringValue(tweetIndex).toLowerCase();
