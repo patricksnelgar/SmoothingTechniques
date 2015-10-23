@@ -1,9 +1,16 @@
 package moa.classifiers.smoothing.smoothingtechniques.foreground.history;
 
+import java.util.List;
+
 public class Forget extends HistoryRetentionTechnique {
 
 	public Forget(final int historySize) {
 		super(historySize);
+	}
+
+	protected void addInternalTweet(final List<String> tweet) {
+		for (String word : tweet)
+			this.addWord(word);
 	}
 
 	/**

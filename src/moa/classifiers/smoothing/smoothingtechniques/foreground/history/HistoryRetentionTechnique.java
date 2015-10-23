@@ -31,10 +31,7 @@ public abstract class HistoryRetentionTechnique {
 		this.addInternalTweet(tweet);
 	}
 
-	protected void addInternalTweet(final List<String> tweet) {
-		for (String word : tweet)
-			this.addWord(word);
-	}
+	protected abstract void addInternalTweet(final List<String> tweet);
 
 	public final void addWord(final String word) {
 		Integer count = this.set.get(word);

@@ -15,7 +15,8 @@ public class Queue extends HistoryRetentionTechnique {
 	@Override
 	protected void addInternalTweet(List<String> tweet) {
 		this.queue.add(tweet);
-		super.addInternalTweet(tweet);
+		for (String word : tweet)
+			this.addWord(word);
 	}
 
 	/**
