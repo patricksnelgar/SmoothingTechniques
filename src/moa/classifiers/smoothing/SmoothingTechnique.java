@@ -483,7 +483,17 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	 * @return a description of the classifier as a string.
 	 */
 	//TODO:
-	public String toString() { return "todo"; }
+	public String toString() {
+		StringBuilder str = new StringBuilder("Smoothing Technique");
+		Measurement[] ms = this.getModelMeasurementsImpl();
+
+		for (Measurement m : ms) {
+			str.append(", ");
+			m.getDescription(str, 0);
+		}
+
+		return str.toString();
+	}
 
 	double truePositive = 0, trueNegative = 0, falsePositive = 0, falseNegative = 0;
 
