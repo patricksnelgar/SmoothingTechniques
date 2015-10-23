@@ -24,7 +24,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	private static final String Punctuation = "\"'.:-!?,;";
 
 	protected int m_minWordsInTweet = 5;
-	protected double m_absoluteDiscountingSigma = 0.9d;
+	protected double m_absoluteDiscountingDelta = 0.9d;
 	protected double m_jalinekMercerSmoothingLambda = 0.4d;
 	protected double m_bayesianSmoothingMu = 10000d;
 	protected double m_stupidBackoffAlpha = 0.3d;
@@ -84,8 +84,8 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 
 	public StringOption hashTagOption = new StringOption("hashTag", 't', "Hash-Tag parameter.", "");
 
-	public FloatOption absoluteDiscountingSigmaOption = new FloatOption("absoluteDiscountingSigma",
-			's', "Absolute Discounting Sigma parameter.",
+	public FloatOption absoluteDiscountingDeltaOption = new FloatOption("absoluteDiscountingDelta",
+			's', "Absolute Discounting Delta parameter.",
 			0.9f, 0f, 1f);
 
 	public FloatOption jalinekMercerSmoothingLambdaOption = new FloatOption("jalinekMercerSmoothingLambda",
@@ -113,18 +113,18 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 	public int getMinWordsInTweet() { return m_minWordsInTweet; }
 
 	/**
-	 * Set the value of Sigma to use in Absolute Discounting.
-	 * @param absoluteDiscountingSigma the value of Sigma to use in Absolute Discounting.
+	 * Set the value of Delta to use in Absolute Discounting.
+	 * @param absoluteDiscountingDelta the value of Delta to use in Absolute Discounting.
 	 */
-	public void setAbsoluteDiscountingSigma(double absoluteDiscountingSigma) {
-		m_absoluteDiscountingSigma = absoluteDiscountingSigma;
+	public void setAbsoluteDiscountingSigma(double absoluteDiscountingDelta) {
+		m_absoluteDiscountingDelta = absoluteDiscountingDelta;
 	}
 
 	/**
-	 * Get the current value of the Absolute Discounting Sigma.
-	 * @return the current value of the Absolute Discounting Sigma.
+	 * Get the current value of the Absolute Discounting Delta.
+	 * @return the current value of the Absolute Discounting Delta.
 	 */
-	public double getAbsoluteDiscountingSigma() { return m_absoluteDiscountingSigma; }
+	public double getAbsoluteDiscountingDelta() { return m_absoluteDiscountingDelta; }
 
 	/**
 	 * Set the value of Lambda to use in Jalinek-Mercer Smoothing.
@@ -272,7 +272,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 		setSmoothingTechnique(this.smoothingFunctionOption.getChosenIndex());
 		setBackgroundDataPath(this.backgroundDataPathOption.getValue());
 		setMinWordsInTweet(this.minWordsInTweetOption.getValue());
-		setAbsoluteDiscountingSigma(this.absoluteDiscountingSigmaOption.getValue());
+		setAbsoluteDiscountingSigma(this.absoluteDiscountingDeltaOption.getValue());
 		setJalinekMercerSmoothingLambda(this.jalinekMercerSmoothingLambdaOption.getValue());
 		setBayesianSmoothingMu(this.bayesianSmoothingMuOption.getValue());
 		setStupidBackoffAlpha(this.stupidBackoffAlphaOption.getValue());
@@ -377,7 +377,7 @@ public class SmoothingTechnique extends AbstractClassifier implements Classifier
 			case ABSOLUTEDISCOUNTING :
 				this.foregroundModel =
 						new AbsoluteDiscounting(backgroundModel, history, this.getThreshold(),
-								this.getAbsoluteDiscountingSigma());
+								this.getAbsoluteDiscountingDelta());
 				break;
 			case JALINEKMERCERSMOOTHING :
 				this.foregroundModel =
